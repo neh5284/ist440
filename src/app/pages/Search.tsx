@@ -2,8 +2,8 @@ import { useSearchParams, Link } from "react-router";
 import { AlbumCard } from "../components/AlbumCard";
 import { Search as SearchIcon, Music, User, SlidersHorizontal } from "lucide-react";
 import { useState, useEffect } from "react";
-import { search as searchAPI } from "../lib/api";
 import { AdvancedSearchModal } from "../components/AdvancedSearchModal";
+import { supabase } from "../lib/supabase";
 
 interface Album {
   id: string;
@@ -38,6 +38,7 @@ export function Search() {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loading, setLoading] = useState(false);
   const [advancedSearchOpen, setAdvancedSearchOpen] = useState(false);
+
   const [filters, setFilters] = useState({
     genre: "All Genres",
     yearFrom: "",
@@ -48,7 +49,7 @@ export function Search() {
 
   useEffect(() => {
     const performSearch = async () => {
-      if (!query) {
+      if (!query.trim()) {
         setAlbums([]);
         setFilteredAlbums([]);
         setArtists([]);
@@ -56,11 +57,68 @@ export function Search() {
       }
 
       setLoading(true);
+
       try {
-        const results = await searchAPI(query);
-        setAlbums(results.albums || []);
-        setFilteredAlbums(results.albums || []);
-        setArtists(results.artists || []);
+        const cleanedQuery = query.trim();
+
+        const { data: albumData, error: albumError } = await supabase
+          .from("albums")
+          .select(`
+            id,
+            title,
+            artist_id,
+            release_year,
+            cover_url,
+            artists (
+              id,
+              name,
+              genre
+            )
+          `)
+          .ilike("title", `%${cleanedQuery}%`)
+          .limit(50);
+
+        const { data: artistData, error: artistError } = await supabase
+          .from("artists")
+          .select(`
+            id,
+            name,
+            genre
+          `)
+          .ilike("name", `%${cleanedQuery}%`)
+          .limit(50);
+
+        if (albumError) {
+          console.error("Error searching albums:", albumError);
+        }
+
+        if (artistError) {
+          console.error("Error searching artists:", artistError);
+        }
+
+        const formattedAlbums: Album[] = (albumData || []).map((album: any) => ({
+          id: album.id,
+          title: album.title,
+          artist_id: album.artist_id,
+          artists: album.artists,
+          year: album.release_year,
+          cover_url: album.cover_url,
+          genre: album.artists?.genre || "Unknown Genre",
+          genres: album.artists?.genre ? [album.artists.genre] : [],
+          averageRating: 0,
+          totalRatings: 0,
+        }));
+
+        const formattedArtists: Artist[] = (artistData || []).map((artist: any) => ({
+          id: artist.id,
+          name: artist.name,
+          image_url: "",
+          genres: artist.genre ? [artist.genre] : [],
+        }));
+
+        setAlbums(formattedAlbums);
+        setFilteredAlbums(formattedAlbums);
+        setArtists(formattedArtists);
       } catch (error) {
         console.error("Error searching:", error);
       } finally {
@@ -71,11 +129,9 @@ export function Search() {
     performSearch();
   }, [query]);
 
-  // Apply filters whenever albums or filters change
   useEffect(() => {
     let result = [...albums];
 
-    // Filter by genre
     if (filters.genre !== "All Genres") {
       result = result.filter((album) => {
         const albumGenres = album.genres || [];
@@ -87,20 +143,20 @@ export function Search() {
       });
     }
 
-    // Filter by year range
     if (filters.yearFrom) {
       result = result.filter((album) => album.year >= parseInt(filters.yearFrom));
     }
+
     if (filters.yearTo) {
       result = result.filter((album) => album.year <= parseInt(filters.yearTo));
     }
 
-    // Filter by minimum rating
     if (filters.minRating) {
-      result = result.filter((album) => (album.averageRating || 0) >= parseFloat(filters.minRating));
+      result = result.filter(
+        (album) => (album.averageRating || 0) >= parseFloat(filters.minRating)
+      );
     }
 
-    // Sort results
     switch (filters.sortBy) {
       case "rating_desc":
         result.sort((a, b) => (b.averageRating || 0) - (a.averageRating || 0));
@@ -117,7 +173,6 @@ export function Search() {
       case "popularity":
         result.sort((a, b) => (b.totalRatings || 0) - (a.totalRatings || 0));
         break;
-      // "relevance" - keep original order
     }
 
     setFilteredAlbums(result);
@@ -127,7 +182,7 @@ export function Search() {
     setFilters(newFilters);
   };
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     filters.genre !== "All Genres" ||
     filters.yearFrom !== "" ||
     filters.yearTo !== "" ||
@@ -142,13 +197,14 @@ export function Search() {
         onApply={handleApplyFilters}
         currentFilters={filters}
       />
-      
+
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <SearchIcon className="w-8 h-8 text-violet-500" />
             <h1 className="text-4xl font-bold text-white">Search Results</h1>
           </div>
+
           {query && activeTab === "albums" && (
             <button
               onClick={() => setAdvancedSearchOpen(true)}
@@ -168,16 +224,18 @@ export function Search() {
             </button>
           )}
         </div>
+
         {query && (
           <p className="text-neutral-400">
-            {loading ? "Searching..." : `Found ${filteredAlbums.length + artists.length} results for "${query}"`}
+            {loading
+              ? "Searching..."
+              : `Found ${filteredAlbums.length + artists.length} results for "${query}"`}
           </p>
         )}
       </div>
 
       {query ? (
         <>
-          {/* Tabs */}
           <div className="flex gap-2 mb-8 border-b border-neutral-800">
             <button
               onClick={() => setActiveTab("albums")}
@@ -192,6 +250,7 @@ export function Search() {
                 <span>Albums ({albums.length})</span>
               </div>
             </button>
+
             <button
               onClick={() => setActiveTab("artists")}
               className={`px-6 py-3 font-semibold transition-colors border-b-2 ${
@@ -207,7 +266,6 @@ export function Search() {
             </button>
           </div>
 
-          {/* Results */}
           {loading ? (
             <div className="text-center text-white">Loading...</div>
           ) : (
@@ -238,18 +296,26 @@ export function Search() {
                           to={`/artist/${artist.id}`}
                           className="group block"
                         >
-                          <div className="relative aspect-square overflow-hidden rounded-lg bg-neutral-900 mb-3">
-                            <img
-                              src={artist.image_url}
-                              alt={artist.name}
-                              className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                            />
+                          <div className="relative aspect-square overflow-hidden rounded-lg bg-neutral-900 mb-3 flex items-center justify-center">
+                            {artist.image_url ? (
+                              <img
+                                src={artist.image_url}
+                                alt={artist.name}
+                                className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                              />
+                            ) : (
+                              <User className="w-16 h-16 text-neutral-700" />
+                            )}
                           </div>
+
                           <h3 className="font-semibold text-white group-hover:text-violet-400 transition-colors">
                             {artist.name}
                           </h3>
+
                           <p className="text-sm text-neutral-400">
-                            {artist.genres && artist.genres.length > 0 ? artist.genres[0] : 'Unknown'}
+                            {artist.genres && artist.genres.length > 0
+                              ? artist.genres[0]
+                              : "Unknown"}
                           </p>
                         </Link>
                       ))}
