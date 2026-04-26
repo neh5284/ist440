@@ -5,6 +5,7 @@ import { getAlbumById } from "../lib/supabase-albums";
 import { RatingWidget } from "../components/RatingWidget";
 import { ReviewCard } from "../components/ReviewCard";
 import { ReviewForm } from "../components/ReviewForm";
+import { AddToListModal } from "../components/AddToListModal";
 import { saveRating, getUserRating, getAlbumRatingStats, AlbumRatingStats } from "../lib/ratings";
 import { submitReview, getAlbumReviews, getUserReview, deleteReview } from "../lib/reviews";
 import { toast } from "sonner";
@@ -272,6 +273,8 @@ export function AlbumDetail() {
                     size="lg"
                   />
                 </div>
+
+                <AddToListModal albumId={album.id} albumTitle={album.title} />
 
                 <a
                   href={album.itunesUrl}

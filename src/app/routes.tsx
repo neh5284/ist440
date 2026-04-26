@@ -5,6 +5,8 @@ import { ArtistPage } from "./pages/ArtistPage";
 import { Charts } from "./pages/Charts";
 import { Profile } from "./pages/Profile";
 import { Search } from "./pages/Search";
+import { ListsPage } from "./pages/ListsPage";
+import { ListDetailPage } from "./pages/ListDetailPage";
 import { Layout } from "./components/Layout";
 
 export const router = createBrowserRouter([
@@ -18,6 +20,8 @@ export const router = createBrowserRouter([
       { path: "charts", Component: Charts },
       { path: "profile", Component: Profile },
       { path: "search", Component: Search },
+      { path: "lists", Component: ListsPage },
+      { path: "lists/:id", Component: ListDetailPage },
     ],
   },
 ]);

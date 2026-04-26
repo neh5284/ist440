@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { Music, Heart, Star, List } from "lucide-react";
+import { Music, Star, List } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
 import { AlbumCard } from "../components/AlbumCard";
 
-type TabType = "rated" | "wishlist" | "collection";
+type TabType = "rated";
 
 export function Profile() {
   const { user } = useAuth();
@@ -13,6 +13,7 @@ export function Profile() {
   const [profile, setProfile] = useState<any>(null);
   const [ratings, setRatings] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [listsCount, setListsCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -21,14 +22,12 @@ export function Profile() {
 
       setLoading(true);
 
-      // Profile
       const { data: profileData } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", user.id)
         .single();
 
-      // Ratings (FIXED QUERY)
       const { data: ratingData, error: ratingError } = await supabase
         .from("ratings")
         .select(`
@@ -46,42 +45,30 @@ export function Profile() {
         `)
         .eq("user_id", user.id);
 
-      // Reviews (FIXED QUERY)
       const { data: reviewData, error: reviewError } = await supabase
         .from("reviews")
-        .select(`
-          *,
-          albums (
-            id,
-            title,
-            release_year,
-            cover_url,
-            artists (
-              name,
-              genre
-            )
-          )
-        `)
+        .select("id")
         .eq("user_id", user.id);
 
-      if (ratingError) {
-        console.error("Error loading ratings:", ratingError);
-      }
+      const { data: listsData, error: listsError } = await supabase
+        .from("lists")
+        .select("id")
+        .eq("user_id", user.id);
 
-      if (reviewError) {
-        console.error("Error loading reviews:", reviewError);
-      }
+      if (ratingError) console.error("Error loading ratings:", ratingError);
+      if (reviewError) console.error("Error loading reviews:", reviewError);
+      if (listsError) console.error("Error loading lists:", listsError);
 
       setProfile(profileData);
       setRatings(ratingData || []);
       setReviews(reviewData || []);
+      setListsCount(listsData?.length || 0);
       setLoading(false);
     }
 
     loadProfileData();
   }, [user]);
 
-  // Map album safely
   const mapAlbum = (album: any) => ({
     id: album.id,
     title: album.title,
@@ -91,26 +78,21 @@ export function Profile() {
     coverUrl: album.cover_url,
   });
 
-  // Rated albums
   const ratedAlbums = ratings
     .filter((item) => item.albums)
     .map((item) => mapAlbum(item.albums));
 
-  // Average rating
   const averageRating =
     ratings.length > 0
       ? ratings.reduce((sum, item) => sum + Number(item.rating || 0), 0) /
         ratings.length
       : 0;
 
-  // Favorite genre
   const genreCounts: Record<string, number> = {};
 
   ratings.forEach((item) => {
     const genre = item.albums?.artists?.genre;
-    if (genre) {
-      genreCounts[genre] = (genreCounts[genre] || 0) + 1;
-    }
+    if (genre) genreCounts[genre] = (genreCounts[genre] || 0) + 1;
   });
 
   const favoriteGenre =
@@ -136,22 +118,16 @@ export function Profile() {
       <div className="mb-12">
         <div className="flex items-start gap-6 mb-6">
           <div className="w-32 h-32 rounded-full bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center flex-shrink-0">
-            <span className="text-5xl font-bold text-white">
-              {firstLetter}
-            </span>
+            <span className="text-5xl font-bold text-white">{firstLetter}</span>
           </div>
 
           <div className="flex-1">
-            <h1 className="text-4xl font-bold text-white mb-2">
-              {displayName}
-            </h1>
+            <h1 className="text-4xl font-bold text-white mb-2">{displayName}</h1>
             <p className="text-neutral-400 mb-4">@{username}</p>
 
             <div className="flex gap-6">
               <div>
-                <div className="text-2xl font-bold text-white">
-                  {ratings.length}
-                </div>
+                <div className="text-2xl font-bold text-white">{ratings.length}</div>
                 <div className="text-sm text-neutral-400">Rated</div>
               </div>
 
@@ -166,25 +142,20 @@ export function Profile() {
               </div>
 
               <div>
-                <div className="text-2xl font-bold text-white">
-                  {reviews.length}
-                </div>
+                <div className="text-2xl font-bold text-white">{reviews.length}</div>
                 <div className="text-sm text-neutral-400">Reviews</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="bg-neutral-900 rounded-lg p-6 border border-neutral-800">
             <div className="flex items-center gap-3 mb-2">
               <Star className="w-5 h-5 text-yellow-400" />
               <h3 className="font-semibold text-white">Average Rating</h3>
             </div>
-            <p className="text-3xl font-bold text-white">
-              {averageRating.toFixed(1)}
-            </p>
+            <p className="text-3xl font-bold text-white">{averageRating.toFixed(1)}</p>
           </div>
 
           <div className="bg-neutral-900 rounded-lg p-6 border border-neutral-800">
@@ -192,9 +163,7 @@ export function Profile() {
               <Music className="w-5 h-5 text-violet-400" />
               <h3 className="font-semibold text-white">Favorite Genre</h3>
             </div>
-            <p className="text-3xl font-bold text-white">
-              {favoriteGenre}
-            </p>
+            <p className="text-3xl font-bold text-white">{favoriteGenre}</p>
           </div>
 
           <div className="bg-neutral-900 rounded-lg p-6 border border-neutral-800">
@@ -202,12 +171,11 @@ export function Profile() {
               <List className="w-5 h-5 text-green-400" />
               <h3 className="font-semibold text-white">Lists Created</h3>
             </div>
-            <p className="text-3xl font-bold text-white">0</p>
+            <p className="text-3xl font-bold text-white">{listsCount}</p>
           </div>
         </div>
       </div>
 
-      {/* Tabs */}
       <div className="flex gap-2 mb-8 border-b border-neutral-800">
         <button
           onClick={() => setActiveTab("rated")}
@@ -221,7 +189,6 @@ export function Profile() {
         </button>
       </div>
 
-      {/* Albums */}
       {currentAlbums.length > 0 ? (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
           {currentAlbums.map((album) => (
@@ -230,9 +197,7 @@ export function Profile() {
         </div>
       ) : (
         <div className="bg-neutral-900 rounded-lg p-12 border border-neutral-800 text-center">
-          <p className="text-neutral-400">
-            No rated albums yet.
-          </p>
+          <p className="text-neutral-400">No rated albums yet.</p>
         </div>
       )}
     </div>
